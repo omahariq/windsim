@@ -12,3 +12,56 @@
 .location-search{position:absolute;z-index:8;top:24px;left:50%;transform:translateX(-50%);width:340px;max-width:calc(100% - 40px)}.search-input{display:flex;align-items:center;gap:10px;padding:12px 14px;color:#aaa}.search-input input{min-width:0;width:100%;background:none;border:0;color:#eee;font-size:14px;outline:none}.search-input:focus-within{border-color:#aaa}.search-results{margin-top:8px;max-height:min(410px,calc(100dvh - 100px));overflow:auto;padding:6px}.search-results p{font-size:14px;color:#aaa;padding:10px;margin:0}.search-results button{width:100%;display:flex;align-items:center;gap:10px;border:0;background:none;padding:12px 10px;text-align:left;font-size:14px;border-radius:6px}.search-results button:hover,.search-results button.selected{background:#ffffff12}.search-results button[aria-disabled=true]{opacity:.45;cursor:not-allowed}.search-results button small{display:block;font-size:12px;color:#999;margin-top:4px}.search-results>a{display:block;font-size:11px;color:#999;padding:10px;border-top:1px solid #ffffff12;text-decoration:none}.place{max-width:280px}.place h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.place .eyebrow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.place p{font-size:11px;letter-spacing:.3px}.weather-bottom{flex-wrap:wrap;gap:6px}
 @media(max-width:900px){.location-search{left:auto;right:20px;transform:none;width:300px}.map-status{top:76px}}
 @media(max-width:700px){.location-search{left:20px;right:20px;top:18px;width:auto;max-width:none}.place{top:84px;max-width:calc(100% - 100px)}.place h1{font-size:32px}.weather{top:214px}.map-status{top:72px}.search-results{max-height:calc(100dvh - 120px)}}
+
+/* Compact map overlays. Location content flows so full place names can wrap. */
+.top-left{position:absolute;top:24px;left:28px;width:min(420px,calc(100% - 112px));display:flex;flex-direction:column;align-items:flex-start;gap:18px;pointer-events:none}
+.top-left .location-search{position:relative;top:auto;left:auto;right:auto;transform:none;width:320px;max-width:100%;pointer-events:auto}
+.top-left .search-results{position:absolute;top:100%;left:0;right:0}
+.top-left .place{position:static;max-width:100%;width:100%}
+.top-left .place h1{font-size:40px;line-height:1.1;letter-spacing:-1.5px;margin:0 0 10px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.top-left .place p{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:400;letter-spacing:.3px;color:#a6a6a6;line-height:1.5;margin:3px 0}
+.top-left .weather{position:static;width:266px;max-width:100%;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:10px 14px;background:rgba(20,20,20,.67);backdrop-filter:blur(8px);pointer-events:auto}
+.weather .panel-label,.weather .weather-bottom,.weather .error{grid-column:1/-1}
+.weather .speed{font-size:40px;letter-spacing:-2px;line-height:1.2;margin:0;align-self:center}
+.weather .speed>span{font-size:13px;margin-left:5px}
+.weather .weather-detail{font-size:11px;gap:6px;align-self:center}
+.weather .weather-detail>span:first-child{gap:5px}
+.weather .weather-detail svg{width:14px;height:14px}
+.weather .weather-bottom{margin:0;padding-top:8px;font-size:9px;gap:5px;line-height:1.5;color:#aaa}
+.weather .error{margin:0;font-size:11px}
+.layer-panel{left:28px;bottom:48px;width:266px;padding:0 14px 2px;background:rgba(20,20,20,.84)}
+.layer-panel .layers-heading{width:100%;margin:0;padding:13px 0;justify-content:space-between;background:none;border:0;text-align:left}
+.layer-panel.collapsed{width:154px;padding-bottom:0}
+.layer-panel .layer-row{padding:12px 0;gap:10px}
+.layer-panel .layer-row small{font-size:10px}
+.particle-settings{left:310px;bottom:48px;max-height:calc(100dvh - 72px)}
+.transport{width:max-content;max-width:calc(100% - 32px);bottom:48px;padding:7px;gap:4px;background:rgba(20,20,20,.84);flex-wrap:wrap}
+.transport-action{display:flex;align-items:center;justify-content:center;gap:8px;border:0;background:none;border-radius:6px;padding:9px 10px;font-size:12px;white-space:nowrap}
+.transport-action:hover{background:#ffffff0c}
+.transport .refresh-area{border-left:1px solid #ffffff1c;border-radius:0 6px 6px 0}
+.transport .info{padding:8px;margin:0}
+.transport-status{flex-basis:100%;max-width:280px;margin:3px 8px 6px;color:#bbb;font-size:11px;line-height:1.4}
+.about{bottom:108px;z-index:6;max-height:calc(100dvh - 140px)}
+.compass-label{bottom:130px}
+.map-status{top:auto;bottom:110px;width:max-content;max-width:calc(100% - 40px);z-index:4}
+@media(max-width:700px){
+ .top-left{top:16px;left:16px;width:calc(100% - 88px);gap:14px}
+ .top-left .place h1{font-size:30px;letter-spacing:-1px;margin-bottom:7px}
+ .top-left .weather{padding:10px 12px;gap:8px 12px}
+ .weather .speed{font-size:34px}
+ .layer-panel{left:16px;bottom:94px;width:250px}
+ .layer-panel .layer-row{padding:9px 0}
+ .particle-settings{left:16px;bottom:94px;width:min(290px,calc(100% - 32px));max-height:calc(100dvh - 110px)}
+ .transport{bottom:30px;gap:2px}
+ .transport-action{font-size:11px;padding:9px 8px;gap:6px}
+ .interaction-hint{display:none}
+ .about{bottom:90px;max-height:calc(100dvh - 110px)}
+ .map-controls{right:16px;top:16px}
+ .compass-label{right:26px;bottom:140px}
+}
+@media(max-height:650px){
+ .top-left{gap:10px;max-height:calc(100dvh - 280px);overflow-y:auto;pointer-events:auto}
+ .top-left .place h1{font-size:28px}
+ .layer-panel .layer-row{padding:7px 0}
+}
+@media(min-width:701px) and (max-width:900px){.transport{left:auto;right:28px;transform:none}}
