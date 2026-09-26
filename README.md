@@ -2,6 +2,10 @@
 
 React + Vite + MapLibre GL. `npm install`, `npm run dev`, `npm run build`, `npm test`.
 
+## Search locations
+
+Use the search box to find a city, town or postal code; add a country to disambiguate (for example, Paris, France). Select a result to update the map, place label, coordinates, local-time weather and simulation origin. Old weather requests and solver jobs are cancelled on location changes. The reset-view button returns to the selected place. Pan is kept local to the selected location; use search to move farther away. Place data comes from Open-Meteo / GeoNames. Locations beyond 80° latitude are outside the supported map area. Some mountain regions may exceed the limited vertical flow domain; the map and uniform wind mode remain available.
+
 ## Using the flow model
 
 **Flow around obstacles** is enabled by default in Wind particles → Settings. The dashed outline marks a 2.56 × 2.56 km domain. Pan and choose **Rebuild around map center** to move it. Geometry and incoming wind changes recalculate the solution. Wind visibility and pause do not rebuild it. Turning terrain or buildings off also removes them from the physical obstacle model.

@@ -1,9 +1,9 @@
 import {MercatorCoordinate} from 'maplibre-gl';
-import {CENTER,windVector} from '../wind';
+import {windVector} from '../wind';
 
 export class FlowSimulation {
  constructor(map,layer,onStatus){this.map=map;this.layer=layer;this.onStatus=onStatus;this.enabled=true;this.wind=null;this.serial=0;this.worker=null;this.timer=null;this.destroyed=false;}
- setWind(wind){this.wind=wind;if(wind)this.rebuild();}
+ setWind(wind){this.wind=wind;if(wind)this.rebuild();else{this.cancel();this.clearBoundary();this.layer.setFlow(null,this.enabled);if(this.enabled)this.onStatus({phase:'loading',message:'Waiting for local wind data…'});}}
  setEnabled(enabled){this.enabled=enabled;if(enabled)this.rebuild();else{this.cancel();this.layer.setFlow(null,false);this.onStatus({phase:'off',message:'Uniform wind'});this.clearBoundary();}}
  cancel(){this.serial++;clearTimeout(this.timer);this.worker?.terminate();this.worker=null;}
  rebuild(){
@@ -13,7 +13,7 @@ export class FlowSimulation {
  }
  fail(message){this.layer.setFlow(null,true);this.onStatus({phase:'error',message});}
  prepare(serial){
-  const origin=MercatorCoordinate.fromLngLat(CENTER),scale=origin.meterInMercatorCoordinateUnits(),center=MercatorCoordinate.fromLngLat(this.map.getCenter());
+  const origin=this.layer.origin,scale=this.layer.scale,center=MercatorCoordinate.fromLngLat(this.map.getCenter());
   const nx=128,ny=128,dx=20,dz=10,nz=48;
   const x0=(center.x-origin.x)/scale-nx*dx/2,y0=(center.y-origin.y)/scale-ny*dx/2;
   const corners=[[x0,y0],[x0+nx*dx,y0],[x0+nx*dx,y0+ny*dx],[x0,y0+ny*dx],[x0,y0]].map(([x,y])=>new MercatorCoordinate(origin.x+x*scale,origin.y+y*scale).toLngLat().toArray());

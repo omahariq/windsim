@@ -22,6 +22,10 @@ export class WindLayer {
   gl.bindVertexArray(null);this.uniforms=Object.fromEntries(['u_matrix','u_color'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
   for(let i=0;i<this.settings.count;i++)this.particles.push(this.spawn(true));
  }
+ setLocation(center){
+  this.origin=MercatorCoordinate.fromLngLat(center);this.scale=this.origin.meterInMercatorCoordinateUnits();
+  this.wind=null;this.setFlow(null,this.flowEnabled);
+ }
  groundAt(x,y){
   if(!this.map.getTerrain())return 0;
   const ll=new MercatorCoordinate(this.origin.x+x*this.scale,this.origin.y+y*this.scale).toLngLat();

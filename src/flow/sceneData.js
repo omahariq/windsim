@@ -9,7 +9,7 @@ async function loadGround(g){
  const ground=new Float32Array(g.nx*g.ny);if(!g.terrain)return ground;
  const tiles=new Map();
  await tileBatch(g,13,async(x,y,z)=>{
-  const response=await checkedFetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`);
+  const response=await checkedFetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${((x%2**z)+2**z)%2**z}/${y}.png`);
   const bitmap=await createImageBitmap(await response.blob(),{colorSpaceConversion:'none',premultiplyAlpha:'none'});
   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d',{willReadFrequently:true});
   if(!context)throw new Error('Terrain image decoding is unavailable in this browser.');
@@ -27,7 +27,7 @@ async function loadBuildings(g){
  const tilejson=await(await checkedFetch('https://tiles.openfreemap.org/planet')).json(),buildings=[];
  if(!tilejson.tiles?.[0])throw new Error('Building tiles are unavailable.');
  await tileBatch(g,14,async(x,y,z)=>{
-  const url=tilejson.tiles[0].replace('{x}',x).replace('{y}',y).replace('{z}',z);
+  const url=tilejson.tiles[0].replace('{x}',((x%2**z)+2**z)%2**z).replace('{y}',y).replace('{z}',z);
   const tile=new VectorTile(new Pbf(new Uint8Array(await(await checkedFetch(url)).arrayBuffer()))),layer=tile.layers.building;
   if(!layer)return;
   for(let i=0;i<layer.length;i++){
