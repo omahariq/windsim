@@ -7,6 +7,7 @@ export function ParticleSettings({settings,onChange,enabled,playing,onToggleWind
  useEffect(()=>{closeButton.current?.focus();},[]);
  useEffect(()=>{const escape=e=>{if(e.key==='Escape'){e.preventDefault();onClose();}};document.addEventListener('keydown',escape);return()=>document.removeEventListener('keydown',escape);},[onClose]);
  const controls=[
+  {key:'height',label:'Height above ground',min:2,max:300,step:1,value:`${settings.height} m`},
   {key:'count',label:'Particle count',min:1000,max:15000,step:1000,value:settings.count.toLocaleString()},
   {key:'trail',label:'Trail length',min:.25,max:4,step:.25,value:`${settings.trail}×`},
   {key:'brightness',label:'Brightness',min:10,max:100,step:1,value:`${settings.brightness}%`},
@@ -18,7 +19,7 @@ export function ParticleSettings({settings,onChange,enabled,playing,onToggleWind
   <div className="settings-toggle"><span id="particles-motion-label">Animate particles</span><button className={`switch ${playing?'on':''}`} role="switch" aria-labelledby="particles-motion-label" aria-checked={playing} onClick={onTogglePlaying}><i/></button></div>
   <label className="particle-color" htmlFor="particle-color"><span>Particle color</span><span className="color-picker">Choose <code>{settings.color.toUpperCase()}</code><input id="particle-color" type="color" value={settings.color} onChange={e=>onChange({...settings,color:e.target.value})}/></span></label>
   {controls.map(control=><label className="particle-setting" key={control.key} htmlFor={`particle-${control.key}`}><span>{control.label}<output>{control.value}</output></span><input id={`particle-${control.key}`} type="range" min={control.min} max={control.max} step={control.step} value={settings[control.key]} onChange={e=>onChange({...settings,[control.key]:Number(e.target.value)})}/></label>)}
-  <p>Appearance controls only. Wind direction and measured speed still come from live data.</p>
+  <p>Height changes the display only. Wind data remains modeled at 10 m. At low heights, buildings may hide particles.</p>
   <button className="settings-reset" onClick={()=>onChange({...DEFAULT_PARTICLE_SETTINGS})}><RotateCcw size={14}/> Reset appearance</button>
  </aside>;
 }

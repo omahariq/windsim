@@ -1,7 +1,7 @@
 import {MercatorCoordinate} from 'maplibre-gl';
 import {CENTER,windVector} from './wind';
 import {localParticleMatrix} from './particleProjection';
-export const DEFAULT_PARTICLE_SETTINGS = {count:5000, trail:1, brightness:78, speed:12, color:'#ffc43b'};
+export const DEFAULT_PARTICLE_SETTINGS = {count:5000, trail:1, brightness:78, speed:12, height:100, color:'#ffc43b'};
 const SEGMENTS=8, EXTENT=4500;
 const vertex=`attribute vec3 a_position; attribute float a_alpha;
 uniform mat4 u_matrix;
@@ -21,7 +21,15 @@ export class WindLayer {
   gl.bindVertexArray(null);this.uniforms=Object.fromEntries(['u_matrix','u_color'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
   for(let i=0;i<this.settings.count;i++)this.particles.push(this.spawn(true));
  }
- spawn(initial=false){const x=(Math.random()-.5)*EXTENT*2,y=(Math.random()-.5)*EXTENT*2;const ll=new MercatorCoordinate(this.origin.x+x*this.scale,this.origin.y+y*this.scale).toLngLat();return {x,y,z:(this.map.queryTerrainElevation(ll)||0)+60+Math.random()*100,life:initial?Math.random()*100:0,max:70+Math.random()*60};}
+ groundAt(x,y){
+  if(!this.map.getTerrain())return 0;
+  const ll=new MercatorCoordinate(this.origin.x+x*this.scale,this.origin.y+y*this.scale).toLngLat();
+  return this.map.queryTerrainElevation(ll)||0;
+ }
+ spawn(initial=false){
+  const x=(Math.random()-.5)*EXTENT*2,y=(Math.random()-.5)*EXTENT*2,ground=this.groundAt(x,y),max=70+Math.random()*60;
+  return {x,y,ground,targetGround:ground,nextGroundSample:performance.now()+Math.random()*1000,life:initial?Math.random()*max:0,max};
+ }
  setSettings(settings){
   const previous=this.settings.count;this.settings={...settings};
   if(previous!==settings.count){
@@ -38,10 +46,15 @@ export class WindLayer {
   const v=windVector(this.wind.speed,this.wind.direction);let k=0;
   for(let i=0;i<this.settings.count;i++){
    let p=this.particles[i];if(this.playing){p.x+=v.east*dt*this.settings.speed;p.y+=v.south*dt*this.settings.speed;p.life+=dt;if(p.life>p.max||Math.abs(p.x)>EXTENT||Math.abs(p.y)>EXTENT)p=this.particles[i]=this.spawn();}
+   // Follow the terrain smoothly, staggering elevation queries across frames.
+   if(now>=p.nextGroundSample){p.targetGround=this.groundAt(p.x,p.y);p.nextGroundSample=now+1000;}
+   if(!this.map.getTerrain())p.ground=p.targetGround=0;
+   else p.ground+= (p.targetGround-p.ground)*(this.playing?1-Math.exp(-dt*5):1);
+   const z=p.ground+this.settings.height;
    const fade=Math.min(1,p.life/3,(p.max-p.life)/3);
    for(let s=0;s<SEGMENTS;s++)for(let e=0;e<2;e++){
     const t=(s+e)/SEGMENTS,trail=(1-t)*36*this.settings.trail;
-    this.vertices[k++]=p.x-v.east*trail;this.vertices[k++]=p.y-v.south*trail;this.vertices[k++]=p.z;this.vertices[k++]=t*fade*this.settings.brightness/100;
+    this.vertices[k++]=p.x-v.east*trail;this.vertices[k++]=p.y-v.south*trail;this.vertices[k++]=z;this.vertices[k++]=t*fade*this.settings.brightness/100;
    }
   }
   gl.useProgram(this.program);gl.bindVertexArray(this.vao);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,this.vertices,gl.DYNAMIC_DRAW);
