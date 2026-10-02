@@ -7,18 +7,20 @@ import './style.css';
 import {style} from './mapStyle';
 import {WindLayer,DEFAULT_PARTICLE_SETTINGS} from './WindLayer';
 import {ParticleSettings} from './ParticleSettings';
+import {isFluid,sampleVelocity} from './flow/solver';
 import {FlowSimulation} from './flow/FlowSimulation';
 import {CENTER,fetchWind,cardinal} from './wind';
 import {LocationSearch} from './LocationSearch';
 import {DEFAULT_LOCATION,coordinatesLabel} from './locations';
 function App(){
  const container=useRef(),map=useRef(),layer=useRef(),refresh=useRef(),settingsButton=useRef(),simulation=useRef();
+ const [pedestrian,setPedestrian]=useState(true),[roughness,setRoughness]=useState(.1),[probe,setProbe]=useState(null);
  const [layersCollapsed,setLayersCollapsed]=useState(false);
  const [location,setLocation]=useState(DEFAULT_LOCATION);
  const [flowEnabled,setFlowEnabled]=useState(true),[flowStatus,setFlowStatus]=useState({phase:'loading',message:'Loading flow model…'});
  const [settingsOpen,setSettingsOpen]=useState(false),[particleSettings,setParticleSettings]=useState({...DEFAULT_PARTICLE_SETTINGS});
  const [ready,setReady]=useState(false),[wind,setWind]=useState(null),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[fetching,setFetching]=useState(true),[layers,setLayers]=useState({wind:true,buildings:true,terrain:true}),[playing,setPlaying]=useState(true),[bearing,setBearing]=useState(-24),[info,setInfo]=useState(false),[now,setNow]=useState(Date.now());
- useEffect(()=>{let m;try{m=new maplibregl.Map({container:container.current,style,center:CENTER,zoom:14.1,pitch:58,bearing:-24,maxPitch:75,maxZoom:18,minZoom:11,renderWorldCopies:false,attributionControl:{compact:true}});}catch{setMapError('WebGL is unavailable. Open this page in a browser with hardware acceleration.');return;}
+ useEffect(()=>{let m;try{m=new maplibregl.Map({container:container.current,style,center:CENTER,zoom:15,pitch:58,bearing:-24,maxPitch:75,maxZoom:18,minZoom:11,renderWorldCopies:false,attributionControl:{compact:true}});}catch{setMapError('WebGL is unavailable. Open this page in a browser with hardware acceleration.');return;}
  map.current=m;m.addControl(new maplibregl.ScaleControl({maxWidth:120}),'bottom-left');
  m.on('error',e=>{console.error(e.error);setMapError('Some map data could not load. Check your connection and reload.');});
  m.on('load',()=>{m.setTerrain({source:'dem',exaggeration:1});const l=new WindLayer();m.addLayer(l);layer.current=l;simulation.current=new FlowSimulation(m,l,setFlowStatus);l.setFlow(null,true);setReady(true);});
@@ -29,7 +31,7 @@ function App(){
   if(!ready)return;
   simulation.current.setWind(null);layer.current.setLocation([location.longitude,location.latitude]);
   map.current.setMaxBounds(null);
-  map.current.jumpTo({center:[location.longitude,location.latitude],zoom:14.1,pitch:58,bearing:-24});
+  map.current.jumpTo({center:[location.longitude,location.latitude],zoom:15,pitch:58,bearing:-24});
   const span=.09/Math.cos(location.latitude*Math.PI/180);
   map.current.setMaxBounds([[location.longitude-span,location.latitude-.09],[location.longitude+span,location.latitude+.09]]);setMapError('');
  },[location,ready]);
@@ -51,22 +53,39 @@ function App(){
  useEffect(()=>{if(ready){layer.current.playing=playing;map.current.triggerRepaint();}},[playing,ready]);
  useEffect(()=>{if(ready)layer.current.setSettings(particleSettings);},[particleSettings,ready]);
  useEffect(()=>{if(ready)simulation.current.setEnabled(flowEnabled);},[flowEnabled,ready]);
+ useEffect(()=>{if(ready)simulation.current.setPedestrian(pedestrian);},[pedestrian,ready]);
+ useEffect(()=>{if(ready)simulation.current.setRoughness(roughness);},[roughness,ready]);
+ useEffect(()=>{
+  if(!ready)return;
+  const update=()=>{
+   const f=layer.current.flow;if(!pedestrian||!flowEnabled||!f||!f.pedestrian){setProbe(null);return;}
+   const center=maplibregl.MercatorCoordinate.fromLngLat(map.current.getCenter());
+   const x=(center.x-layer.current.origin.x)/layer.current.scale,y=(center.y-layer.current.origin.y)/layer.current.scale;
+   const ix=Math.floor((x-f.x0)/f.dx),iy=Math.floor((y-f.y0)/f.dx);
+   if(ix<1||iy<1||ix>=f.nx-1||iy>=f.ny-1){setProbe({message:'Outside detail area · refresh area'});return;}
+   const z=f.ground[iy*f.nx+ix]+1.5;
+   if(!isFluid(f,x,y,z)){setProbe({message:'Move centre onto an open street'});return;}
+   const v=sampleVelocity(f,x,y,z);setProbe({speed:Math.hypot(v[0],v[1]),message:'At map centre · 1.5 m'});
+  };
+  update();map.current.on('moveend',update);return()=>map.current.off('moveend',update);
+ },[ready,pedestrian,flowEnabled,flowStatus]);
  useEffect(()=>{document.title=`${location.name} · Wind Observatory`;},[location]);
  const toggle=k=>setLayers(v=>({...v,[k]:!v[k]}));
- const reset=()=>map.current?.flyTo({center:[location.longitude,location.latitude],zoom:14.1,pitch:58,bearing:-24});
+ const reset=()=>map.current?.flyTo({center:[location.longitude,location.latitude],zoom:15,pitch:58,bearing:-24});
  const updatingArea=flowEnabled&&(flowStatus.phase==='loading'||flowStatus.phase==='solving');
  const stale=wind&&(now-wind.receivedAt>1200000||error);
  return <main><div ref={container} className="map" aria-label={`Interactive 3D map of ${location.name}`}/><div className="top-shade"/>
 
- <div className="top-left">
  <LocationSearch onSelect={place=>{setWind(null);simulation.current?.setWind(null);layer.current?.setWind(null);setLocation(place);}}/>
+ <div className="top-left">
  <section className="place"><h1>{location.name}</h1><p className="location-region">{[location.country,location.admin1].filter(Boolean).join(' / ')}</p><p>{coordinatesLabel(location.latitude,location.longitude)}</p></section>
- <section className="weather panel"><div className="panel-label"><Wind size={16}/> CURRENT WIND <button className={fetching?'spin icon':'icon'} aria-label="Refresh wind data" onClick={()=>refresh.current?.()} disabled={fetching}><RefreshCw size={14}/></button></div><div className="speed">{wind?wind.speed.toFixed(1):'—'}<span>m/s</span></div><div className="weather-detail"><span><ArrowUpRight size={18} style={{transform:`rotate(${(wind?.direction||0)+135}deg)`}}/>{wind?`From ${cardinal(wind.direction)} · ${wind.direction}°`:'Awaiting wind data'}</span><span>Gusts <b>{wind?wind.gust.toFixed(1):'—'}</b> m/s</span></div><div className="weather-bottom">{wind?`${stale?'Last reading · ':''}Model time ${wind.time.slice(11,16)} ${wind.timezone}`:'Fetching Open-Meteo'}<span>↗ Open-Meteo</span></div>{error&&<p role="status" className="error">{error} {wind?'Showing last reading.':'Particles paused until data returns.'}</p>}</section>
+ <section className="weather panel"><div className="panel-label"><Wind size={16}/> WEATHER WIND <button className={fetching?'spin icon':'icon'} aria-label="Refresh wind data" onClick={()=>refresh.current?.()} disabled={fetching}><RefreshCw size={14}/></button></div><div className="speed">{wind?wind.speed.toFixed(1):'—'}<span>m/s</span></div><div className="weather-detail"><span><ArrowUpRight size={18} style={{transform:`rotate(${(wind?.direction||0)+135}deg)`}}/>{wind?`From ${cardinal(wind.direction)} · ${wind.direction}°`:'Awaiting wind data'}</span><span>Gusts <b>{wind?wind.gust.toFixed(1):'—'}</b> m/s</span></div><div className="weather-bottom">{wind?`${stale?'Last reading · ':''}Model time ${wind.time.slice(11,16)} ${wind.timezone}`:'Fetching Open-Meteo'}<span>↗ Open-Meteo · 10 m</span></div>{error&&<p role="status" className="error">{error} {wind?'Showing last reading.':'Particles paused until data returns.'}</p>}{pedestrian&&flowEnabled&&<div className="pedestrian-reading"><span>Pedestrian estimate</span><b>{probe?.speed!==undefined?`${probe.speed.toFixed(1)} m/s`:flowStatus.phase==='error'?'Unavailable':flowStatus.phase==='ready'?'—':'Calculating…'}</b><small>{probe?.message||'At map centre · 1.5 m'}</small></div>}</section>
  </div>
  <section className={`layer-panel panel ${layersCollapsed?'collapsed':''}`}><button className="panel-label layers-heading" aria-label={layersCollapsed?'Expand map layers':'Minimize map layers'} aria-expanded={!layersCollapsed} aria-controls="map-layer-options" onClick={()=>{setLayersCollapsed(!layersCollapsed);setSettingsOpen(false);}}>MAP LAYERS {layersCollapsed?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button><div id="map-layer-options" hidden={layersCollapsed}>{[["wind",Wind,"Wind particles",`${particleSettings.count.toLocaleString()} flowing particles`],["buildings",Layers3,"3D buildings","OpenStreetMap geometry"],["terrain",Mountain,"Terrain","Real elevation · 1×"]].map(([id,Icon,title,sub])=><div key={id} className="layer-row"><Icon size={19}/><span id={`layer-${id}`}>{title}<small>{sub}</small></span>{id==='wind'&&<button ref={settingsButton} className={`icon particle-settings-trigger ${settingsOpen?'active':''}`} aria-label="Wind particle settings" aria-expanded={settingsOpen} aria-controls="particle-settings" onClick={()=>setSettingsOpen(!settingsOpen)}><Settings2 size={17}/></button>}<button className={`switch ${layers[id]?'on':''}`} role="switch" aria-labelledby={`layer-${id}`} aria-checked={layers[id]} onClick={()=>toggle(id)}><i/></button></div>)}</div></section>
- {settingsOpen&&<ParticleSettings flowEnabled={flowEnabled} flowStatus={flowStatus} onToggleFlow={()=>setFlowEnabled(!flowEnabled)} onRebuild={()=>simulation.current?.rebuild()} settings={particleSettings} onChange={setParticleSettings} enabled={layers.wind} playing={playing} onToggleWind={()=>toggle('wind')} onTogglePlaying={()=>setPlaying(!playing)} onClose={()=>{setSettingsOpen(false);settingsButton.current?.focus();}}/>}
+ {settingsOpen&&<ParticleSettings pedestrian={pedestrian} roughness={roughness} onRoughness={setRoughness} onTogglePedestrian={()=>{setPedestrian(!pedestrian);setParticleSettings(v=>({...v,height:1.5}));}} flowEnabled={flowEnabled} flowStatus={flowStatus} onToggleFlow={()=>setFlowEnabled(!flowEnabled)} onRebuild={()=>simulation.current?.rebuild()} settings={particleSettings} onChange={setParticleSettings} enabled={layers.wind} playing={playing} onToggleWind={()=>toggle('wind')} onTogglePlaying={()=>setPlaying(!playing)} onClose={()=>{setSettingsOpen(false);settingsButton.current?.focus();}}/>}
  <div className="map-controls panel"><button aria-label="Zoom in" onClick={()=>map.current?.zoomIn()}><Plus/></button><button aria-label="Zoom out" onClick={()=>map.current?.zoomOut()}><Minus/></button><hr/><button aria-label={`Reset view to ${location.name}`} onClick={reset}><LocateFixed size={20}/></button><button aria-label="Reset north" onClick={()=>map.current?.easeTo({bearing:0})}><Compass size={21} style={{transform:`rotate(${-bearing}deg)`}}/></button></div>
 
+ {pedestrian&&flowEnabled&&<div className="pedestrian-crosshair" aria-hidden="true">+</div>}
  <div className="compass-label" style={{transform:`rotate(${-bearing}deg)`}}><span>N</span><div>↑</div></div>
  <footer className="transport panel">
   <button className="transport-action" aria-label={playing?'Pause particles':'Play particles'} onClick={()=>setPlaying(!playing)}>{playing?<Pause size={16}/>:<Play size={16}/>}<span>{playing?'Pause wind':'Play wind'}</span></button>
@@ -75,7 +94,7 @@ function App(){
   {flowEnabled&&flowStatus.phase==='error'&&<p className="transport-status" role="status">{flowStatus.message}</p>}
  </footer>
  <div className="interaction-hint">Drag to pan <span>·</span> Scroll to zoom <span>·</span> Right-drag to rotate</div>
- {info&&<aside className="about panel"><b>A first look at the wind</b><p>Open-Meteo’s current modeled wind at 10 m, refreshed every 10 minutes. The reading supplies the model’s uniform incoming wind. Particles move at {particleSettings.speed}× visual speed. Height selects their release height; simulated trajectories can rise and fall.</p><p>OSM building footprints are extruded using available heights; missing heights use the tile provider’s estimate. Terrain uses Mapzen elevation. Obstacle mode solves steady, incompressible, inviscid potential flow in the outlined area. It enforces no flow through solid faces, using 20 m horizontal and 10 m vertical voxels. It omits turbulent wakes, viscosity, atmospheric stability and wind shear. Narrow gaps can disappear at this resolution; only buildings represented in OSM are included. This is an exploratory approximation, not a validated engineering forecast.</p><a href="https://doc.openfoam.com/2306/tools/processing/solvers/rtm/basic/potentialFoam/" target="_blank" rel="noreferrer">About potential-flow physics ↗</a><br/><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data: Open-Meteo ↗</a></aside>}
+ {info&&<aside className="about panel"><b>A first look at the wind</b><p>Open-Meteo’s current modeled wind at 10 m, refreshed every 10 minutes. The reading supplies incoming wind. Pedestrian mode applies an assumed neutral logarithmic wind profile, then projects the field to conserve mass around obstacles. This is a mass-consistent airflow estimate, not a turbulence simulation. Particles move at {particleSettings.speed}× visual speed. Height selects their release height; simulated trajectories can rise and fall.</p><p>OSM building footprints are extruded using available heights; missing heights use the tile provider’s estimate. Terrain uses Mapzen elevation. Pedestrian mode resolves a 1 km × 1 km square at 10 m horizontal and 1 m vertical spacing. Overview mode covers the same 1 km² with 20 m horizontal cells and adaptive vertical spacing. Solid faces prevent normal flow but allow tangential slip. The centre readout estimates horizontal wind at 1.5 m; it is not a measurement or a comfort rating. It omits turbulent wakes, viscosity, atmospheric stability and full boundary-layer dynamics. Narrow gaps can disappear at this resolution; only buildings represented in OSM are included. This is an exploratory approximation, not a validated engineering forecast.</p><a href="https://doc.openfoam.com/2306/tools/processing/solvers/rtm/basic/potentialFoam/" target="_blank" rel="noreferrer">About potential-flow physics ↗</a><br/><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data: Open-Meteo ↗</a></aside>}
  {(!ready||mapError)&&<div className="map-status" role="status">{mapError||`Loading ${location.name}’s terrain and buildings…`}</div>}
  </main>;
 }

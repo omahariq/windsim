@@ -2,7 +2,7 @@ import {MercatorCoordinate} from 'maplibre-gl';
 import {CENTER,windVector} from './wind';
 import {localParticleMatrix} from './particleProjection';
 import {advect,isFluid,segmentIsFluid} from './flow/solver';
-export const DEFAULT_PARTICLE_SETTINGS = {count:5000, trail:1, brightness:78, speed:12, height:100, color:'#ffc43b'};
+export const DEFAULT_PARTICLE_SETTINGS = {count:7000, trail:2.5, brightness:78, speed:12, height:1.5, color:'#ffc43b'};
 const SEGMENTS=8, EXTENT=4500;
 const vertex=`attribute vec3 a_position; attribute float a_alpha;
 uniform mat4 u_matrix;
@@ -39,7 +39,7 @@ export class WindLayer {
     const ix=2+Math.floor(Math.random()*(f.nx-4)),iy=2+Math.floor(Math.random()*(f.ny-4));
     const x=f.x0+(ix+.5)*f.dx,y=f.y0+(iy+.5)*f.dx,ground=f.ground[iy*f.nx+ix];
     // Ground voxels round terrain upward; seed above that numerical surface.
-    const z=Math.max(ground+this.settings.height,f.z0+Math.ceil((ground-f.z0)/f.dz)*f.dz+1);
+    const z=Math.max(ground+this.settings.height,f.z0+Math.ceil((ground-f.z0)/f.dz)*f.dz+.05);
     if(!isFluid(f,x,y,z))continue;
     const history=new Float32Array((SEGMENTS+1)*3);let back=[x,y,z];history.set(back,SEGMENTS*3);
     for(let i=SEGMENTS-1;i>=0;i--){back=advect(f,back,-36*this.settings.trail/SEGMENTS)||back;history.set(back,i*3);}

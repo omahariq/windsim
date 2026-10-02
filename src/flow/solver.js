@@ -1,16 +1,25 @@
-// Steady inviscid incompressible potential flow, on a Cartesian voxel grid.
-// u = U + grad(phi); div(u)=0. Solid faces have u.n=0 (free slip).
-// Boundary fluid cells hold phi=0 (uniform far-field potential).
+import {referenceFaces} from './windProfile.js';
+// Mass-consistent Cartesian wind field: u = reference + grad(phi), div(u)=0.
+// Uniform reference gives potential flow; pedestrian mode uses a neutral log
+// profile. Solid faces have u.n=0 (free slip); outer fluid cells hold phi=0.
+// This projects continuity only; it does not solve viscous momentum/turbulence.
 // Matrix-free, diagonal-preconditioned conjugate gradient solves the SPD
 // finite-volume Laplacian. SI units throughout; animation scaling is external.
-export function solveFlow({nx,ny,nz,dx,dz,solid,wind,x0=0,y0=0,z0=0,maxIterations=500,tolerance=1e-4},progress=()=>{}){
+export function solveFlow({nx,ny,nz,dx,dz,solid,wind,x0=0,y0=0,z0=0,maxIterations=500,tolerance=1e-4,ground,pedestrian=false,roughness=.1},progress=()=>{}){
  const n=nx*ny*nz,plane=nx*ny,h=[dx,dx,dz],base=[wind.east,wind.south,0];
+ const reference=pedestrian?referenceFaces({nx,ny,nz,dx,dz,z0,ground,wind,roughness}):null;
  const offsets=[-1,1,-nx,nx,-plane,plane],weights=[1/dx**2,1/dx**2,1/dx**2,1/dx**2,1/dz**2,1/dz**2];
  const phi=new Float64Array(n),diag=new Float64Array(n),b=new Float64Array(n),r=new Float64Array(n),p=new Float64Array(n),ap=new Float64Array(n),active=[];
  for(let z=1;z<nz-1;z++)for(let y=1;y<ny-1;y++)for(let x=1;x<nx-1;x++){
   const i=(z*ny+y)*nx+x;if(solid[i])continue;
   for(let d=0;d<6;d++){
-   if(solid[i+offsets[d]])b[i]-=base[d>>1]*(d%2?1:-1)/h[d>>1];
+   if(reference){
+    // Project the full sheared reference field, including its divergence over slopes.
+    if(!solid[i+offsets[d]]){
+     const face=d<2?reference.fx[(z*ny+y)*(nx+1)+x+(d===1?1:0)]:d<4?reference.fy[(z*(ny+1)+y+(d===3?1:0))*nx+x]:0;
+     b[i]+=face*(d%2?1:-1)/h[d>>1];diag[i]+=weights[d];
+    }
+   }else if(solid[i+offsets[d]])b[i]-=base[d>>1]*(d%2?1:-1)/h[d>>1];
    else diag[i]+=weights[d];
   }
   if(diag[i])active.push(i);
@@ -29,18 +38,18 @@ export function solveFlow({nx,ny,nz,dx,dz,solid,wind,x0=0,y0=0,z0=0,maxIteration
  const fx=new Float32Array((nx+1)*ny*nz),fy=new Float32Array(nx*(ny+1)*nz),fz=new Float32Array(nx*ny*(nz+1));
  for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<=nx;x++){
   const a=(z*ny+y)*nx+x-1,c=a+1;
-  fx[(z*ny+y)*(nx+1)+x]=(x>0&&solid[a])||(x<nx&&solid[c])?0:base[0]+(x>0&&x<nx?(phi[c]-phi[a])/dx:0);
+  fx[(z*ny+y)*(nx+1)+x]=(x>0&&solid[a])||(x<nx&&solid[c])?0:(reference?reference.fx[(z*ny+y)*(nx+1)+x]:base[0])+(x>0&&x<nx?(phi[c]-phi[a])/dx:0);
  }
  for(let z=0;z<nz;z++)for(let y=0;y<=ny;y++)for(let x=0;x<nx;x++){
   const a=(z*ny+y-1)*nx+x,c=a+nx;
-  fy[(z*(ny+1)+y)*nx+x]=(y>0&&solid[a])||(y<ny&&solid[c])?0:base[1]+(y>0&&y<ny?(phi[c]-phi[a])/dx:0);
+  fy[(z*(ny+1)+y)*nx+x]=(y>0&&solid[a])||(y<ny&&solid[c])?0:(reference?reference.fy[(z*(ny+1)+y)*nx+x]:base[1])+(y>0&&y<ny?(phi[c]-phi[a])/dx:0);
  }
  for(let z=0;z<=nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
   const a=((z-1)*ny+y)*nx+x,c=a+plane;
   fz[(z*ny+y)*nx+x]=(z>0&&solid[a])||(z<nz&&solid[c])?0:(z>0&&z<nz?(phi[c]-phi[a])/dz:0);
  }
  let maxDivergence=0;for(const i of active){const x=i%nx,y=Math.floor(i/nx)%ny,z=Math.floor(i/plane);const div=(fx[(z*ny+y)*(nx+1)+x+1]-fx[(z*ny+y)*(nx+1)+x])/dx+(fy[(z*(ny+1)+y+1)*nx+x]-fy[(z*(ny+1)+y)*nx+x])/dx+(fz[((z+1)*ny+y)*nx+x]-fz[(z*ny+y)*nx+x])/dz;maxDivergence=Math.max(maxDivergence,Math.abs(div));}
- return {nx,ny,nz,dx,dz,x0,y0,z0,solid,fx,fy,fz,iterations,relativeResidual,maxDivergence,converged:relativeResidual<=tolerance};
+ return {nx,ny,nz,dx,dz,x0,y0,z0,solid,fx,fy,fz,pedestrian,roughness,iterations,relativeResidual,maxDivergence,converged:relativeResidual<=tolerance};
 }
 export function isFluid(field,x,y,z){
  const ix=Math.floor((x-field.x0)/field.dx),iy=Math.floor((y-field.y0)/field.dx),iz=Math.floor((z-field.z0)/field.dz);
